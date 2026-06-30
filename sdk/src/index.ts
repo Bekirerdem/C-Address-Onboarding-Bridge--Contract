@@ -16,4 +16,10 @@ export type {
   RetryLogger,
   RetryableClassifier,
 } from './retry';
+export {
+  computeWasmHash,
+  fetchDeployedWasmHash,
+  verifyDeployedWasm,
+} from './verify';
+export type { ContractDataReader, WasmVerification } from './verify';
 export * from './types';

@@ -9,6 +9,7 @@ import {
 } from '@stellar/stellar-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
+import { verifyDeployedWasm } from '../sdk/src/verify';
 
 interface DeployConfig {
   rpcUrl: string;
@@ -91,6 +92,8 @@ async function main() {
     }
     console.log(`Contract ID: ${createResult.contractId}`);
 
+    await verifyDeployment(provider, wasm, createResult.contractId);
+
     if (command === 'all') {
       await initialize(provider, cfg, admin, createResult.contractId);
     }
@@ -103,6 +106,43 @@ async function main() {
     }
     await initialize(provider, cfg, admin, customId);
   }
+
+  if (command === 'verify') {
+    if (!customId) {
+      console.error('Usage: npx ts-node scripts/deploy.ts verify <contract_id>');
+      process.exit(1);
+    }
+    const wasm = fs.readFileSync(cfg.wasmPath);
+    await verifyDeployment(provider, wasm, customId);
+  }
+}
+
+/**
+ * Verify that the contract deployed at `contractId` is running byte-for-byte the
+ * local WASM artifact. Prints both hashes and throws (→ non-zero exit) on
+ * mismatch so a tampered or stale deploy can never pass silently.
+ */
+async function verifyDeployment(
+  provider: SorobanRpc.Server,
+  wasm: Buffer,
+  contractId: string,
+): Promise<void> {
+  console.log('Verifying deployed WASM matches local build...');
+  const { match, localHash, deployedHash } = await verifyDeployedWasm(
+    provider,
+    contractId,
+    wasm,
+  );
+  console.log(`  local SHA256:  ${localHash}`);
+  console.log(`  deployed hash: ${deployedHash}`);
+  if (!match) {
+    throw new Error(
+      'WASM verification FAILED: deployed contract does not match the local build.\n' +
+        `  local:    ${localHash}\n` +
+        `  deployed: ${deployedHash}`,
+    );
+  }
+  console.log('WASM verification PASSED — on-chain code matches local build.');
 }
 
 async function initialize(
